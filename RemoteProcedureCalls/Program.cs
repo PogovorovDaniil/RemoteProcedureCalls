@@ -2,23 +2,36 @@
 
 namespace RemoteProcedureCalls
 {
-    public interface ICow
+    public interface IMath
     {
-        void Say(string text);
+        int Sum(int a, int b);
+        int Mul(int a, int b);
     }
 
     public class Program
     {
         public static object Method(string interfaceName, string methodName, object[] parameters, Type returnType)
         {
-            Console.WriteLine($"{returnType} {interfaceName}.{methodName}({string.Join(", ", parameters)});");
-            return returnType.IsValueType ? 0 : null;
+            if(interfaceName == "IMath")
+            {
+                if(methodName == "Sum")
+                {
+                    return (int)parameters[0] + (int)parameters[1];
+                }
+                if(methodName == "Mul")
+                {
+                    return (int)parameters[0] * (int)parameters[1];
+                }
+            }
+            return null;
         }
+
         public static void Main()
         {
             var factory = new ImplementationFactory(Method);
-            var test = factory.Create<ICow>();
-            test.Say("Moooo");
+            IMath math = factory.Create<IMath>();
+            Console.WriteLine(math.Sum(4, 5));
+            Console.WriteLine(math.Mul(4, 5));
         }
     }
 }
