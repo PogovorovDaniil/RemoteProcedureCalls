@@ -12,7 +12,6 @@ namespace RemoteProcedureCalls
         private static ModuleBuilder module;
         private static Dictionary<Type, TypeBuilder> definedTypes;
         private static List<Type> returnTypes;
-        private static List<ImplementationFactory> thises;
         private static string randomName => Guid.NewGuid().ToString();
         static ImplementationFactory()
         {
@@ -20,7 +19,6 @@ namespace RemoteProcedureCalls
             module = assembly.DefineDynamicModule(randomName);
             definedTypes = new Dictionary<Type, TypeBuilder>();
             returnTypes = new List<Type>();
-            thises = new List<ImplementationFactory>();
         }
 
         public delegate object CallHandler(string interfaceName, string methodName, object[] parameters, Type returnType);
@@ -37,16 +35,19 @@ namespace RemoteProcedureCalls
 
             TypeBuilder typeBuilder = module.DefineType(randomName);
             typeBuilder.AddInterfaceImplementation(typeof(T));
+
+            FieldBuilder fieldBuilder = typeBuilder.DefineField("factory", typeof(ImplementationFactory), FieldAttributes.Public);
+
             foreach(var method in typeof(T).GetMethods())
             {
-                MethodBuilder methodBuilder = CreateMethod(method, typeBuilder, typeof(T));
+                MethodBuilder methodBuilder = CreateMethod(method, typeBuilder, typeof(T), fieldBuilder);
                 typeBuilder.DefineMethodOverride(methodBuilder, method);
             }
             typeBuilder.CreateType();
             return typeBuilder;
         }
 
-        private MethodBuilder CreateMethod(MethodInfo method, TypeBuilder typeBuilder, Type interfaceType)
+        private MethodBuilder CreateMethod(MethodInfo method, TypeBuilder typeBuilder, Type interfaceType, FieldBuilder fieldBuilder)
         {
             MethodBuilder methodBuilder = typeBuilder.DefineMethod(method.Name, MethodAttributes.Public | MethodAttributes.Virtual);
             ILGenerator il = methodBuilder.GetILGenerator();
@@ -54,10 +55,8 @@ namespace RemoteProcedureCalls
             methodBuilder.SetParameters(parameterInfos.Select(x => x.ParameterType).ToArray());
             methodBuilder.SetReturnType(method.ReturnType);
 
-            if (!thises.Contains(this)) thises.Add(this);
-            int indexOfThis = thises.FindIndex(x => x == this);
-            il.Emit(OpCodes.Ldc_I4, indexOfThis);
-            il.EmitCall(OpCodes.Call, GetType().GetMethod(nameof(GetThis)), null);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, fieldBuilder);
 
             il.Emit(OpCodes.Ldstr, interfaceType.Name);
             il.Emit(OpCodes.Ldstr, method.Name);
@@ -99,14 +98,15 @@ namespace RemoteProcedureCalls
         }
 
         public object AnyMethod(string interfaceName, string methodName, object[] parameters, Type returnType) => callHandler(interfaceName, methodName, parameters, returnType);
-        public static Type GetReturnType(int index) => returnTypes[index]; 
-        public static object GetThis(int index) => thises[index];
+        public static Type GetReturnType(int index) => returnTypes[index];
 
         public T Create<T>() where T : class
         {
             if(!typeof(T).IsInterface) throw new ArgumentException();
             TypeBuilder type = CreateType<T>();
-            return (T)assembly.CreateInstance(type.Name);
+            T value = (T)assembly.CreateInstance(type.Name);
+            type.GetField("factory").SetValue(value, this);
+            return value;
         }
     }
 }
