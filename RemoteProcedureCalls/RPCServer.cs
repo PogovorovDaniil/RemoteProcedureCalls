@@ -73,6 +73,8 @@ namespace RemoteProcedureCalls
                         args[i] = JsonSerializer.Deserialize(callObject.Arguments[i], argTypes[i]);
                     }
                     object result = method.Invoke(implementation, args);
+
+                    if (method.ReturnType == typeof(void)) return;
                     string resultJson = JsonSerializer.Serialize(result, method.ReturnType);
                     byte[] resultBytes = Encoding.UTF8.GetBytes(resultJson);
                     buffer = new byte[2];

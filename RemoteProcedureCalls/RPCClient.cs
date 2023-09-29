@@ -53,6 +53,8 @@ namespace RemoteProcedureCalls
                 stream.Write(buffer);
                 stream.Write(callBytes);
 
+                if(returnType == typeof(void)) return null;
+
                 buffer = new byte[2];
                 stream.Read(buffer); 
                 int size = buffer[0] + 0x100 * buffer[1];
