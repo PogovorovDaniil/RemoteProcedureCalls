@@ -37,7 +37,7 @@ namespace RemoteProcedureCalls
 
             FieldBuilder fieldBuilder = typeBuilder.DefineField("factory", typeof(ImplementationFactory), FieldAttributes.Public);
 
-            foreach(var method in typeof(T).GetMethods())
+            foreach(var method in typeof(T).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
             {
                 MethodBuilder methodBuilder = CreateMethod(method, typeBuilder, typeof(T), fieldBuilder);
                 typeBuilder.DefineMethodOverride(methodBuilder, method);

@@ -7,6 +7,7 @@ namespace TestClient
     {
         int Sum(int a, int b);
         int Mul(int a, int b);
+        int Constant { get; set; }
     }
     internal class Program
     {
@@ -17,6 +18,7 @@ namespace TestClient
 
             Console.WriteLine(imp.Sum(40, 2));
             Console.WriteLine(imp.Mul(2, 2));
+            imp.Constant = 42;
             while (true) ;
         }
     }

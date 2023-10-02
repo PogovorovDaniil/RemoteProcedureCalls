@@ -13,6 +13,7 @@ namespace RemoteProcedureCalls
     public class RPCServer : IDisposable
     {
         private readonly Socket socket;
+        private readonly Task listener;
         private readonly Dictionary<Type, object> implementations;
         private readonly Dictionary<string, Type> interfaces;
 
@@ -30,7 +31,7 @@ namespace RemoteProcedureCalls
 
             tokenSource = new CancellationTokenSource();
             cancellationToken = tokenSource.Token;
-            Task.Run(Listener, cancellationToken);
+            listener = Task.Run(Listener, cancellationToken);
         }
 
         public void AddImplementation<TInterface>(TInterface implementation) where TInterface : class
@@ -42,14 +43,18 @@ namespace RemoteProcedureCalls
 
         private async Task Listener()
         {
+            List<Thread> threadPool = new List<Thread>();
             while (!tokenSource.IsCancellationRequested)
             {
                 Socket client = await socket.AcceptAsync(cancellationToken);
-                ClientCommunications(client);
+                Thread thread = new Thread(() => ClientCalls(client));
+                thread.Start();
+                threadPool.Add(thread);
             }
+            foreach(var thread in threadPool) thread.Join();
         }
 
-        private void ClientCommunications(Socket client)
+        private void ClientCalls(Socket client)
         {
             using var stream = new NetworkStream(client);
             stream.ReadTimeout = 5000;
@@ -79,6 +84,7 @@ namespace RemoteProcedureCalls
         {
             tokenSource.Cancel();
             socket.Dispose();
+            listener.GetAwaiter().GetResult();
         }
     }
 }
