@@ -3,23 +3,24 @@ using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Text.Json;
-using System.Text;
 using System.Linq;
 using System.Collections.Generic;
 
 namespace RemoteProcedureCalls
 {
-    public class RPCClient
+    public class RPCClient : IDisposable
     {
-        private Socket socket;
-        private ImplementationFactory implementationFactory;
-        private Dictionary<string, Type> interfaces;
-        public RPCClient(string address = "127.0.0.1")
+        private readonly Socket socket;
+        private readonly ImplementationFactory implementationFactory;
+        private readonly Dictionary<string, Type> interfaces;
+        private readonly object lockObj;
+        public RPCClient(string address = "127.0.0.1", int port = 55278)
         {
             interfaces = new Dictionary<string, Type>();
+            lockObj = new object();
 
             socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            socket.Connect(new IPEndPoint(IPAddress.Parse(address), 55278));
+            socket.Connect(new IPEndPoint(IPAddress.Parse(address), port));
             implementationFactory = new ImplementationFactory((interfaceName, methodName, parameters, returnType) => Call(interfaceName, methodName, parameters, returnType));
         }
 
@@ -44,27 +45,20 @@ namespace RemoteProcedureCalls
             {
                 callObject.Arguments[i] = JsonSerializer.Serialize(parameters[i], argTypes[i]);
             }
-            byte[] callBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(callObject));
-            using (var stream = new NetworkStream(socket))
+            lock (lockObj)
             {
-                byte[] buffer = new byte[2];
-                buffer[0] = (byte)(callBytes.Length & 0xFF);
-                buffer[1] = (byte)(callBytes.Length / 0x100);
-                stream.Write(buffer);
-                stream.Write(callBytes);
-
-                if(returnType == typeof(void)) return null;
-
-                buffer = new byte[2];
-                stream.Read(buffer); 
-                int size = buffer[0] + 0x100 * buffer[1];
-                buffer = new byte[size];
-                stream.Read(buffer);
-
-                string resultJson = Encoding.UTF8.GetString(buffer, 0, size);
-                object result = JsonSerializer.Deserialize(resultJson, returnType);
-                return result;
+                using (var stream = new NetworkStream(socket))
+                {
+                    NetworkHelper.Send(stream, callObject);
+                    if(returnType == typeof(void)) return null;
+                    return NetworkHelper.Read(stream, returnType);
+                }
             }
+        }
+
+        public void Dispose()
+        {
+            socket.Dispose();
         }
     }
 }

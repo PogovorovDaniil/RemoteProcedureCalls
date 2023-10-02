@@ -6,26 +6,26 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Text;
 using System.Reflection;
 
 namespace RemoteProcedureCalls
 {
     public class RPCServer : IDisposable
     {
-        private Socket socket;
-        private Dictionary<Type, object> implementations;
-        private Dictionary<string, Type> interfaces;
-        private CancellationTokenSource tokenSource;
-        private CancellationToken cancellationToken;
+        private readonly Socket socket;
+        private readonly Dictionary<Type, object> implementations;
+        private readonly Dictionary<string, Type> interfaces;
 
-        public RPCServer()
+        private readonly CancellationTokenSource tokenSource;
+        private readonly CancellationToken cancellationToken;
+
+        public RPCServer(int port = 55278)
         {
             implementations = new Dictionary<Type, object>();
             interfaces = new Dictionary<string, Type>();
 
             socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            socket.Bind(new IPEndPoint(IPAddress.Any, 55278));
+            socket.Bind(new IPEndPoint(IPAddress.Any, port));
             socket.Listen(0);
 
             tokenSource = new CancellationTokenSource();
@@ -35,7 +35,7 @@ namespace RemoteProcedureCalls
 
         public void AddImplementation<TInterface>(TInterface implementation) where TInterface : class
         {
-            if(implementations.Any(x => x.Key.Name == typeof(TInterface).Name)) throw new ArgumentException("Интерфейс с таким именем уже определён");
+            if (implementations.Any(x => x.Key.Name == typeof(TInterface).Name)) throw new ArgumentException("Интерфейс с таким именем уже определён");
             interfaces[typeof(TInterface).Name] = typeof(TInterface);
             implementations[typeof(TInterface)] = implementation;
         }
@@ -51,18 +51,14 @@ namespace RemoteProcedureCalls
 
         private async Task ClientCommunications(Socket client)
         {
-            byte[] buffer;
             using (var stream = new NetworkStream(client))
             {
-                while (!cancellationToken.IsCancellationRequested)
+                Console.WriteLine("{0} connected", client.RemoteEndPoint);
+                while (!cancellationToken.IsCancellationRequested || client.Connected)
                 {
-                    buffer = new byte[2];
-                    if (await stream.ReadAsync(buffer, 0, buffer.Length) == 0) return;
-                    int size = buffer[0] + 0x100 * buffer[1];
-                    buffer = new byte[size];
-                    if (await stream.ReadAsync(buffer, 0, buffer.Length) == 0) return;
-                    string jsonCallObject = Encoding.UTF8.GetString(buffer, 0, size);
-                    CallObject callObject = JsonSerializer.Deserialize<CallObject>(jsonCallObject);
+                    Console.WriteLine("{0} ping", client.RemoteEndPoint);
+                    CallObject callObject = await NetworkHelper.ReadAsync<CallObject>(stream, cancellationToken);
+                    if (callObject is null) break;
 
                     object implementation = implementations[interfaces[callObject.InterfaceName]];
                     MethodInfo method = implementation.GetType().GetMethod(callObject.MethodName);
@@ -74,21 +70,17 @@ namespace RemoteProcedureCalls
                     }
                     object result = method.Invoke(implementation, args);
 
-                    if (method.ReturnType == typeof(void)) return;
-                    string resultJson = JsonSerializer.Serialize(result, method.ReturnType);
-                    byte[] resultBytes = Encoding.UTF8.GetBytes(resultJson);
-                    buffer = new byte[2];
-                    buffer[0] = (byte)(resultBytes.Length & 0xFF);
-                    buffer[1] = (byte)(resultBytes.Length / 0x100);
-                    await stream.WriteAsync(buffer, cancellationToken);
-                    await stream.WriteAsync(resultBytes, cancellationToken);
+                    if (method.ReturnType == typeof(void)) continue;
+                    await NetworkHelper.SendAsync(stream, result, method.ReturnType, cancellationToken);
                 }
+                Console.WriteLine("{0} disconnected", client.RemoteEndPoint);
             }
         }
 
-        public void Dispose()
+        public void Dispose() 
         {
             tokenSource.Cancel();
+            socket.Dispose();
         }
     }
 }

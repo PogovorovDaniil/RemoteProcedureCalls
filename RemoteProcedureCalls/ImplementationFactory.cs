@@ -8,10 +8,10 @@ namespace RemoteProcedureCalls
 {
     public class ImplementationFactory
     {
-        private static AssemblyBuilder assembly;
-        private static ModuleBuilder module;
-        private static Dictionary<Type, TypeBuilder> definedTypes;
-        private static List<Type> returnTypes;
+        private static readonly AssemblyBuilder assembly;
+        private static readonly ModuleBuilder module;
+        private static readonly Dictionary<Type, TypeBuilder> definedTypes;
+        private static readonly List<Type> returnTypes;
         private static string randomName => Guid.NewGuid().ToString();
         static ImplementationFactory()
         {
@@ -22,8 +22,7 @@ namespace RemoteProcedureCalls
         }
 
         public delegate object CallHandler(string interfaceName, string methodName, object[] parameters, Type returnType);
-        private CallHandler callHandler;
-
+        private readonly CallHandler callHandler;
         public ImplementationFactory(CallHandler callHandler)
         {
             this.callHandler = callHandler;
