@@ -49,9 +49,11 @@ namespace RemoteProcedureCalls
             {
                 using (var stream = new NetworkStream(socket))
                 {
-                    NetworkHelper.Send(stream, callObject);
+                    if(!NetworkHelper.Send(stream, callObject)) throw new TimeoutException();
                     if(returnType == typeof(void)) return null;
-                    return NetworkHelper.Read(stream, returnType);
+                    object result = NetworkHelper.Read(stream, returnType);
+                    if(result is null) throw new TimeoutException();
+                    return result;
                 }
             }
         }

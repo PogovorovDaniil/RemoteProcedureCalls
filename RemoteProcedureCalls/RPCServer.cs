@@ -45,39 +45,37 @@ namespace RemoteProcedureCalls
             while (!tokenSource.IsCancellationRequested)
             {
                 Socket client = await socket.AcceptAsync(cancellationToken);
-                await ClientCommunications(client);
+                ClientCommunications(client);
             }
         }
 
-        private async Task ClientCommunications(Socket client)
+        private void ClientCommunications(Socket client)
         {
-            using (var stream = new NetworkStream(client))
+            using var stream = new NetworkStream(client);
+            stream.ReadTimeout = 5000;
+            stream.WriteTimeout = 5000;
+
+            while (!cancellationToken.IsCancellationRequested && client.Connected)
             {
-                Console.WriteLine("{0} connected", client.RemoteEndPoint);
-                while (!cancellationToken.IsCancellationRequested || client.Connected)
+                CallObject callObject = NetworkHelper.Read<CallObject>(stream);
+                if (callObject is null) continue;
+
+                object implementation = implementations[interfaces[callObject.InterfaceName]];
+                MethodInfo method = implementation.GetType().GetMethod(callObject.MethodName);
+                Type[] argTypes = method.GetParameters().Select(p => p.ParameterType).ToArray();
+                object[] args = new object[callObject.Arguments.Length];
+                for (int i = 0; i < callObject.Arguments.Length; i++)
                 {
-                    Console.WriteLine("{0} ping", client.RemoteEndPoint);
-                    CallObject callObject = await NetworkHelper.ReadAsync<CallObject>(stream, cancellationToken);
-                    if (callObject is null) break;
-
-                    object implementation = implementations[interfaces[callObject.InterfaceName]];
-                    MethodInfo method = implementation.GetType().GetMethod(callObject.MethodName);
-                    Type[] argTypes = method.GetParameters().Select(p => p.ParameterType).ToArray();
-                    object[] args = new object[callObject.Arguments.Length];
-                    for (int i = 0; i < callObject.Arguments.Length; i++)
-                    {
-                        args[i] = JsonSerializer.Deserialize(callObject.Arguments[i], argTypes[i]);
-                    }
-                    object result = method.Invoke(implementation, args);
-
-                    if (method.ReturnType == typeof(void)) continue;
-                    await NetworkHelper.SendAsync(stream, result, method.ReturnType, cancellationToken);
+                    args[i] = JsonSerializer.Deserialize(callObject.Arguments[i], argTypes[i]);
                 }
-                Console.WriteLine("{0} disconnected", client.RemoteEndPoint);
+                object result = method.Invoke(implementation, args);
+
+                if (method.ReturnType == typeof(void)) continue;
+                if(!NetworkHelper.Send(stream, result, method.ReturnType)) continue;
             }
         }
 
-        public void Dispose() 
+        public void Dispose()
         {
             tokenSource.Cancel();
             socket.Dispose();
