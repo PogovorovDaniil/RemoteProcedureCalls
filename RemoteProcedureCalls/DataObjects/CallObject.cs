@@ -1,4 +1,4 @@
-﻿namespace RemoteProcedureCalls
+﻿namespace RemoteProcedureCalls.DataObjects
 {
     public class CallObject
     {

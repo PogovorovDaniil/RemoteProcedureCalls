@@ -21,7 +21,7 @@ namespace RemoteProcedureCalls
             returnTypes = new List<Type>();
         }
 
-        public delegate object CallHandler(string interfaceName, string methodName, object[] parameters, Type returnType);
+        public delegate object CallHandler(string interfaceName, string methodName, object[] parameters);
         private readonly CallHandler callHandler;
         public ImplementationFactory(CallHandler callHandler)
         {
@@ -35,18 +35,18 @@ namespace RemoteProcedureCalls
             TypeBuilder typeBuilder = module.DefineType(randomName);
             typeBuilder.AddInterfaceImplementation(typeof(T));
 
-            FieldBuilder fieldBuilder = typeBuilder.DefineField("factory", typeof(ImplementationFactory), FieldAttributes.Public);
+            FieldBuilder factoryField = typeBuilder.DefineField("factory", typeof(ImplementationFactory), FieldAttributes.Public);
 
             foreach(var method in typeof(T).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
             {
-                MethodBuilder methodBuilder = CreateMethod(method, typeBuilder, typeof(T), fieldBuilder);
+                MethodBuilder methodBuilder = CreateMethod(method, typeBuilder, typeof(T), factoryField);
                 typeBuilder.DefineMethodOverride(methodBuilder, method);
             }
             typeBuilder.CreateType();
             return typeBuilder;
         }
 
-        private MethodBuilder CreateMethod(MethodInfo method, TypeBuilder typeBuilder, Type interfaceType, FieldBuilder fieldBuilder)
+        private MethodBuilder CreateMethod(MethodInfo method, TypeBuilder typeBuilder, Type interfaceType, FieldBuilder factoryField)
         {
             MethodBuilder methodBuilder = typeBuilder.DefineMethod(method.Name, MethodAttributes.Public | MethodAttributes.Virtual);
             ILGenerator il = methodBuilder.GetILGenerator();
@@ -55,7 +55,7 @@ namespace RemoteProcedureCalls
             methodBuilder.SetReturnType(method.ReturnType);
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, fieldBuilder);
+            il.Emit(OpCodes.Ldfld, factoryField);
 
             il.Emit(OpCodes.Ldstr, interfaceType.Name);
             il.Emit(OpCodes.Ldstr, method.Name);
@@ -76,13 +76,6 @@ namespace RemoteProcedureCalls
                 }
                 il.Emit(OpCodes.Stelem_Ref);
             }
-
-            Type returnType = method.ReturnType;
-            if(!returnTypes.Contains(returnType)) returnTypes.Add(returnType);
-            int indexOfType = returnTypes.FindIndex(x => x == returnType);
-            il.Emit(OpCodes.Ldc_I4, indexOfType);
-            il.EmitCall(OpCodes.Call, GetType().GetMethod(nameof(GetReturnType)), null);
-
             il.EmitCall(OpCodes.Call, GetType().GetMethod(nameof(AnyMethod)), null);
             if (method.ReturnType == typeof(void))
             {
@@ -90,13 +83,13 @@ namespace RemoteProcedureCalls
             }
             else if (method.ReturnType.IsValueType)
             {
-                il.Emit(OpCodes.Unbox_Any, returnType);
+                il.Emit(OpCodes.Unbox_Any, method.ReturnType);
             }
             il.Emit(OpCodes.Ret);
             return methodBuilder;
         }
 
-        public object AnyMethod(string interfaceName, string methodName, object[] parameters, Type returnType) => callHandler(interfaceName, methodName, parameters, returnType);
+        public object AnyMethod(string interfaceName, string methodName, object[] parameters) => callHandler(interfaceName, methodName, parameters);
         public static Type GetReturnType(int index) => returnTypes[index];
 
         public T Create<T>() where T : class

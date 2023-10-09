@@ -1,16 +1,16 @@
 ﻿using System;
-using System.Net;
-using System.Net.Sockets;
 using System.Reflection;
 using System.Text.Json;
 using System.Linq;
 using System.Collections.Generic;
+using RemoteProcedureCalls.Network;
+using RemoteProcedureCalls.DataObjects;
 
 namespace RemoteProcedureCalls
 {
     public class RPCClient : IDisposable
     {
-        private readonly Socket socket;
+        private readonly ExtendedSocket socket;
         private readonly ImplementationFactory implementationFactory;
         private readonly Dictionary<string, Type> interfaces;
         private readonly object lockObj;
@@ -19,9 +19,8 @@ namespace RemoteProcedureCalls
             interfaces = new Dictionary<string, Type>();
             lockObj = new object();
 
-            socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            socket.Connect(new IPEndPoint(IPAddress.Parse(address), port));
-            implementationFactory = new ImplementationFactory((interfaceName, methodName, parameters, returnType) => Call(interfaceName, methodName, parameters, returnType));
+            socket = new Client().Connect($"{address}:{port}");
+            implementationFactory = new ImplementationFactory((interfaceName, methodName, parameters) => Call(interfaceName, methodName, parameters));
         }
 
         public T GetImplementation<T>() where T : class
@@ -31,7 +30,7 @@ namespace RemoteProcedureCalls
             return implementationFactory.Create<T>();
         }
 
-        public object Call(string interfaceName, string methodName, object[] parameters, Type returnType)
+        public object Call(string interfaceName, string methodName, object[] parameters)
         {
             MethodInfo method = interfaces[interfaceName].GetMethod(methodName);
             Type[] argTypes = method.GetParameters().Select(p => p.ParameterType).ToArray();
@@ -47,14 +46,10 @@ namespace RemoteProcedureCalls
             }
             lock (lockObj)
             {
-                using (var stream = new NetworkStream(socket))
-                {
-                    if(!NetworkHelper.Send(stream, callObject)) throw new TimeoutException();
-                    if(returnType == typeof(void)) return null;
-                    object result = NetworkHelper.Read(stream, returnType);
-                    if(result is null) throw new TimeoutException();
-                    return result;
-                }
+                socket.Send(callObject);
+                if(method.ReturnType == typeof(void)) return null;
+                object result = socket.Receive(method.ReturnType);
+                return result;
             }
         }
 
