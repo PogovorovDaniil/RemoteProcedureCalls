@@ -1,6 +1,6 @@
-﻿using System.Text.Json;
+﻿using System;
 using System.Text;
-using System;
+using System.Text.Json;
 
 namespace RemoteProcedureCalls.Network
 {

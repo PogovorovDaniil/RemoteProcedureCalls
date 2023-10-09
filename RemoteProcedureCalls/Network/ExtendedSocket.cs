@@ -67,7 +67,7 @@ namespace RemoteProcedureCalls.Network
                 catch (IOException ex)
                 {
                     if (ex.InnerException is SocketException socketException && socketException.SocketErrorCode == SocketError.TimedOut) continue;
-                    
+
                     throwException = ex.InnerException ?? ex;
                     isThrowed = true;
                     break;
@@ -86,7 +86,7 @@ namespace RemoteProcedureCalls.Network
 
         public void Send(byte[] data, byte channel = 0)
         {
-            if(IsDisposed) throw new ObjectDisposedException(GetType().FullName);
+            if (IsDisposed) throw new ObjectDisposedException(GetType().FullName);
 
             lock (lockSend)
             {

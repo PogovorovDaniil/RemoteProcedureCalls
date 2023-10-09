@@ -30,14 +30,14 @@ namespace RemoteProcedureCalls
 
         private TypeBuilder CreateType<T>() where T : class
         {
-            if(definedTypes.TryGetValue(typeof(T), out var builder)) return builder;
+            if (definedTypes.TryGetValue(typeof(T), out var builder)) return builder;
 
             TypeBuilder typeBuilder = module.DefineType(randomName);
             typeBuilder.AddInterfaceImplementation(typeof(T));
 
             FieldBuilder factoryField = typeBuilder.DefineField("factory", typeof(ImplementationFactory), FieldAttributes.Public);
 
-            foreach(var method in typeof(T).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+            foreach (var method in typeof(T).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
             {
                 MethodBuilder methodBuilder = CreateMethod(method, typeBuilder, typeof(T), factoryField);
                 typeBuilder.DefineMethodOverride(methodBuilder, method);
@@ -64,7 +64,7 @@ namespace RemoteProcedureCalls
             il.Emit(OpCodes.Newarr, typeof(object));
 
             int paramIndex = 0;
-            foreach(var parameter in parameterInfos)
+            foreach (var parameter in parameterInfos)
             {
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4, paramIndex);
@@ -94,7 +94,7 @@ namespace RemoteProcedureCalls
 
         public T Create<T>() where T : class
         {
-            if(!typeof(T).IsInterface) throw new ArgumentException();
+            if (!typeof(T).IsInterface) throw new ArgumentException();
             TypeBuilder type = CreateType<T>();
             T value = (T)assembly.CreateInstance(type.Name);
             type.GetField("factory").SetValue(value, this);

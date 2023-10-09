@@ -1,10 +1,10 @@
-﻿using System;
+﻿using RemoteProcedureCalls.DataObjects;
+using RemoteProcedureCalls.Network;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
-using System.Linq;
-using System.Collections.Generic;
-using RemoteProcedureCalls.Network;
-using RemoteProcedureCalls.DataObjects;
 
 namespace RemoteProcedureCalls
 {
@@ -47,7 +47,7 @@ namespace RemoteProcedureCalls
             lock (lockObj)
             {
                 socket.Send(callObject);
-                if(method.ReturnType == typeof(void)) return null;
+                if (method.ReturnType == typeof(void)) return null;
                 object result = socket.Receive(method.ReturnType);
                 return result;
             }

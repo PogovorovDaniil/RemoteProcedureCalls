@@ -1,10 +1,10 @@
-﻿using System;
+﻿using RemoteProcedureCalls.DataObjects;
+using RemoteProcedureCalls.Network;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Reflection;
-using RemoteProcedureCalls.Network;
-using RemoteProcedureCalls.DataObjects;
+using System.Text.Json;
 
 namespace RemoteProcedureCalls
 {
