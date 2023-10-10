@@ -102,7 +102,7 @@ namespace RemoteProcedureCalls.Core
             var methodInfo = type.GetMethod("Invoke");
             var parameterInfos = methodInfo.GetParameters();
 
-            var method = new DynamicMethod("myDynamicMethod", methodInfo.ReturnType, parameterInfos.Select(x => x.ParameterType).ToArray());
+            var method = new DynamicMethod(RandomName, methodInfo.ReturnType, parameterInfos.Select(x => x.ParameterType).ToArray());
             var il = method.GetILGenerator();
 
             il.Emit(OpCodes.Ldc_I4, dataIndex);
