@@ -1,21 +1,15 @@
-﻿using RemoteProcedureCalls;
+﻿using RemoteProcedureCalls.Core;
 using System;
+using TestCore;
 
 namespace TestServer
 {
-    public interface ITest
-    {
-        int Sum(int a, int b);
-        int Mul(int a, int b);
-        int Constant { get; set; }
-        void Act(Action<string> action);
-        Func<int, int, int> GetSum();
-    }
     public class Test : ITest
     {
         private int _constant;
-        public int Constant {
-            get 
+        public int Constant
+        {
+            get
             {
                 return _constant;
             }

@@ -1,6 +1,6 @@
-﻿namespace RemoteProcedureCalls.DataObjects
+﻿namespace RemoteProcedureCalls.Network.Data
 {
-    public class CallDelegateObject
+    internal class CallDelegateObject
     {
         public string DelegateName { get; set; }
         public int DelegateIndex { get; set; }

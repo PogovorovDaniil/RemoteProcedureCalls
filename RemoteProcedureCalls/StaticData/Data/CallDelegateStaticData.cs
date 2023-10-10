@@ -1,9 +1,9 @@
 ﻿using RemoteProcedureCalls.Network;
 using System.Reflection;
 
-namespace RemoteProcedureCalls.StaticData
+namespace RemoteProcedureCalls.StaticData.Data
 {
-    public class CallDelegateStaticData
+    internal class CallDelegateStaticData
     {
         public ExtendedSocket Socket { get; set; }
         public MethodInfo DelegateMethod { get; set; }

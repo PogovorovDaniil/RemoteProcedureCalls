@@ -4,7 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 
-namespace RemoteProcedureCalls
+namespace RemoteProcedureCalls.Core
 {
     // TODO IEnumerable
     public class TypeFactory
@@ -21,7 +21,7 @@ namespace RemoteProcedureCalls
             definedTypes = new Dictionary<Type, TypeBuilder>();
             returnTypes = new List<Type>();
         }
-        public delegate object MethodHandler(string interfaceName, string methodName, object[] parameters); 
+        public delegate object MethodHandler(string interfaceName, string methodName, object[] parameters);
         public delegate object DelegateHandler(string delegateName, int index, object[] parameters);
         private readonly MethodHandler methodHandler;
         public TypeFactory(MethodHandler methodHandler)

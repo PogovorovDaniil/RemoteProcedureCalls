@@ -1,6 +1,7 @@
-﻿using RemoteProcedureCalls.DataObjects;
-using RemoteProcedureCalls.Network;
+﻿using RemoteProcedureCalls.Network;
+using RemoteProcedureCalls.Network.Data;
 using RemoteProcedureCalls.StaticData;
+using RemoteProcedureCalls.StaticData.Data;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +9,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace RemoteProcedureCalls
+namespace RemoteProcedureCalls.Core
 {
     public class RPCServer : IDisposable
     {

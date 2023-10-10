@@ -3,7 +3,7 @@ using System.Net.Sockets;
 
 namespace RemoteProcedureCalls.Network
 {
-    public class Client
+    internal class Client
     {
         private readonly Socket socket;
         private readonly byte channelCount;

@@ -6,7 +6,7 @@ using System.Threading;
 
 namespace RemoteProcedureCalls.Network
 {
-    public class Server : IDisposable
+    internal class Server : IDisposable
     {
         private readonly Socket socket;
         private readonly IPEndPoint localEndPoint;

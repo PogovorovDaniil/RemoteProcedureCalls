@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace RemoteProcedureCalls.Network
 {
-    public static class NetworkHelper
+    internal static class NetworkHelper
     {
         public static T Receive<T>(this ExtendedSocket socket, byte channel = 0) => Deserialize<T>(socket.Receive(channel));
         public static object Receive(this ExtendedSocket socket, Type type, byte channel = 0) => Deserialize(socket.Receive(channel), type);

@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RemoteProcedureCalls\RemoteProcedureCalls.csproj" />
+    <ProjectReference Include="..\TestCore\TestCore.csproj" />
   </ItemGroup>
 
 </Project>

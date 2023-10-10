@@ -3,11 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
 using System.Threading;
-using System.Threading.Channels;
 
 namespace RemoteProcedureCalls.Network
 {
-    public class ExtendedSocket : IDisposable
+    internal class ExtendedSocket : IDisposable
     {
         private readonly Socket socket;
         private readonly Queue<byte[]>[] inputData;
