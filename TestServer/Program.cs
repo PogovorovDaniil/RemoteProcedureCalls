@@ -6,17 +6,17 @@ namespace TestServer
 {
     public class Test : ITest
     {
-        private int _constant;
-        public int Constant
+        private int _value;
+        public int Value
         {
             get
             {
-                return _constant;
+                return _value;
             }
             set
             {
-                _constant = value;
-                Console.WriteLine(_constant);
+                _value = value;
+                Console.WriteLine(_value);
             }
         }
         public int Sum(int a, int b) => a + b;

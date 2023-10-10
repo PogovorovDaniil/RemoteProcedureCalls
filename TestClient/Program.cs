@@ -9,21 +9,20 @@ namespace TestClient
         static void Main(string[] args)
         {
             var client = new RPCClient();
-            var imp = client.GetImplementation<ITest>();
+            var test = client.GetImplementation<ITest>();
 
-            Console.WriteLine(imp.Sum(40, 2));
-            Console.WriteLine(imp.Sum(1, 2, 3));
-            Console.WriteLine(imp.Mul(2, 2));
-            imp.Constant = 42;
+            Console.WriteLine(test.Sum(40, 2));
+            Console.WriteLine(test.Sum(1, 2, 3));
+            Console.WriteLine(test.Mul(2, 2));
+            test.Value = 42;
 
-            imp.Act((text) =>
+            test.Act((text) =>
             {
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine(text);
                 Console.ResetColor();
             });
-            Console.WriteLine(imp.GetSum()(30, 6));
-
+            Console.WriteLine(test.GetSum()(30, 6));
 
             var counter = client.GetImplementation<ICounter>();
             while (true)

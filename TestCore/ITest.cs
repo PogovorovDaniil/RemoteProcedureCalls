@@ -5,7 +5,7 @@
         int Sum(int a, int b);
         int Sum(int a, int b, int c);
         int Mul(int a, int b);
-        int Constant { get; set; }
+        int Value { get; set; }
         void Act(Action<string> action);
         Func<int, int, int> GetSum();
     }
