@@ -53,7 +53,8 @@ namespace TestServer
         {
             var server = new RPCServer();
             server.AddImplementation<ITest>(() => new Test());
-            server.AddImplementation<ICounter>(() => new MyCounter());
+            var counter = new MyCounter();
+            server.AddImplementation<ICounter>(() => counter);
             while (true) ;
         }
     }

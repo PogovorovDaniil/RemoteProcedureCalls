@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
 using System.Threading;
@@ -9,9 +8,8 @@ namespace RemoteProcedureCalls.Network
     internal class ExtendedSocket : IDisposable
     {
         private readonly Socket socket;
-        private readonly Queue<byte[]>[] inputData;
+        private readonly BlockingQueue<byte[]>[] inputData;
         private readonly Thread receiveThread;
-        private readonly AutoResetEvent[] receiveAwait;
         private readonly object lockSend;
         private bool isDisposed;
 
@@ -25,14 +23,9 @@ namespace RemoteProcedureCalls.Network
         internal ExtendedSocket(Socket socket, byte channelCount)
         {
             this.socket = socket;
-            inputData = new Queue<byte[]>[channelCount];
-            for (int i = 0; i < inputData.Length; i++) inputData[i] = new Queue<byte[]>();
+            inputData = new BlockingQueue<byte[]>[channelCount];
+            for (int i = 0; i < inputData.Length; i++) inputData[i] = new BlockingQueue<byte[]>();
             receiveThread = new Thread(ReceiveHandler);
-            receiveAwait = new AutoResetEvent[channelCount];
-            for (int i = 0; i < receiveAwait.Length; i++)
-            {
-                receiveAwait[i] = new AutoResetEvent(false);
-            }
             lockSend = new object();
             isDisposed = false;
 
@@ -65,7 +58,6 @@ namespace RemoteProcedureCalls.Network
                     stream.Read(buffer);
 
                     inputData[channel].Enqueue(buffer);
-                    receiveAwait[channel].Set();
                 }
                 catch (IOException ex)
                 {
@@ -82,7 +74,6 @@ namespace RemoteProcedureCalls.Network
         {
             if (isThrowed) throw throwException;
             if (IsClosed) throw new ObjectDisposedException(GetType().FullName);
-            receiveAwait[channel].WaitOne();
             if (inputData[channel].TryDequeue(out byte[] data)) return data;
             throw new SocketException((int)SocketError.TimedOut);
         }
@@ -120,9 +111,9 @@ namespace RemoteProcedureCalls.Network
         public void Dispose()
         {
             isDisposed = false;
-            foreach (var rAwait in receiveAwait)
+            foreach (var data in inputData)
             {
-                rAwait.Set();
+                data.Unlock();
             }
             socket.Close();
             receiveThread.Join();
