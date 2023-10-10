@@ -11,7 +11,7 @@ namespace RemoteProcedureCalls.Network
         private readonly Socket socket;
         private readonly Queue<byte[]>[] inputData;
         private readonly Thread receiveThread;
-        private readonly EventWaitHandle[] receiveAwait;
+        private readonly AutoResetEvent[] receiveAwait;
         private readonly object lockSend;
         private bool isDisposed;
 
@@ -28,8 +28,11 @@ namespace RemoteProcedureCalls.Network
             inputData = new Queue<byte[]>[channelCount];
             for (int i = 0; i < inputData.Length; i++) inputData[i] = new Queue<byte[]>();
             receiveThread = new Thread(ReceiveHandler);
-            receiveAwait = new EventWaitHandle[channelCount];
-            for(int i = 0; i < receiveAwait.Length; i++) receiveAwait[i] = new EventWaitHandle(false, EventResetMode.AutoReset);
+            receiveAwait = new AutoResetEvent[channelCount];
+            for (int i = 0; i < receiveAwait.Length; i++)
+            {
+                receiveAwait[i] = new AutoResetEvent(false);
+            }
             lockSend = new object();
             isDisposed = false;
 
@@ -63,7 +66,6 @@ namespace RemoteProcedureCalls.Network
 
                     inputData[channel].Enqueue(buffer);
                     receiveAwait[channel].Set();
-                    receiveAwait[channel].Reset();
                 }
                 catch (IOException ex)
                 {
@@ -80,7 +82,7 @@ namespace RemoteProcedureCalls.Network
         {
             if (isThrowed) throw throwException;
             if (IsClosed) throw new ObjectDisposedException(GetType().FullName);
-            if (inputData[channel].Count == 0) receiveAwait[channel].WaitOne(ReceiveTimeout);
+            receiveAwait[channel].WaitOne();
             if (inputData[channel].TryDequeue(out byte[] data)) return data;
             throw new SocketException((int)SocketError.TimedOut);
         }
@@ -118,7 +120,7 @@ namespace RemoteProcedureCalls.Network
         public void Dispose()
         {
             isDisposed = false;
-            foreach(var rAwait in receiveAwait)
+            foreach (var rAwait in receiveAwait)
             {
                 rAwait.Set();
             }

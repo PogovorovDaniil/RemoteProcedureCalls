@@ -36,12 +36,24 @@ namespace TestServer
             return (a, b) => a + b;
         }
     }
+
+    public class MyCounter : ICounter
+    {
+        int counter = 0;
+        public int Counter => counter++;
+
+        public void Clear()
+        {
+            counter = 0;
+        }
+    }
     internal class Program
     {
         static void Main()
         {
             var server = new RPCServer();
             server.AddImplementation<ITest>(() => new Test());
+            server.AddImplementation<ICounter>(() => new MyCounter());
             while (true) ;
         }
     }

@@ -23,7 +23,13 @@ namespace TestClient
                 Console.ResetColor();
             });
             Console.WriteLine(imp.GetSum()(30, 6));
-            while (true) ;
+
+
+            var counter = client.GetImplementation<ICounter>();
+            while (true)
+            {
+                Console.WriteLine(counter.Counter);
+            }
         }
     }
 }

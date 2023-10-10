@@ -33,10 +33,17 @@ namespace RemoteProcedureCalls.Core
 
         private void Server_OnClientConnected(ExtendedSocket socket)
         {
-            Parallel.Invoke(
-                () => ProtocolMethods.GetImplementation(socket, interfaceNames, implementations, interfaces, interfaceMethods, instances, 0),
-                () => ProtocolMethods.CallMethodHandler(socket, implementationFactory, CallDelegate, interfaces, interfaceMethods, instances, 1),
-                () => ProtocolMethods.CallDelegateHandler(socket, 3));
+            try
+            {
+                Parallel.Invoke(
+                    () => ProtocolMethods.GetImplementation(socket, interfaceNames, implementations, interfaces, interfaceMethods, instances, 0),
+                    () => ProtocolMethods.CallMethodHandler(socket, implementationFactory, CallDelegate, interfaces, interfaceMethods, instances, 1),
+                    () => ProtocolMethods.CallDelegateHandler(socket, 3));
+            }
+            catch (Exception ex)
+            {
+
+            }
         }
 
         internal static object CallDelegate(int dataIndex, object[] parameters) => ProtocolMethods.CallDelegate(dataIndex, 2, parameters);
