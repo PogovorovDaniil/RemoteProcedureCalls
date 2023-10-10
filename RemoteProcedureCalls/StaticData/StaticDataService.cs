@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace RemoteProcedureCalls.StaticData
 {
-    internal static class StaticObject
+    internal static class StaticDataService
     {
         private static Dictionary<Type, List<object>> objects = new Dictionary<Type, List<object>>();
         private static Dictionary<Type, object> locks = new Dictionary<Type, object>();

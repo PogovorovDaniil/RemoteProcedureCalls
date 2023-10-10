@@ -1,4 +1,4 @@
-﻿namespace RemoteProcedureCalls.Network.Data
+﻿namespace RemoteProcedureCalls.Network.Models
 {
     internal class CallDelegateObject
     {

@@ -1,7 +1,7 @@
 ﻿using RemoteProcedureCalls.Network;
 using System.Reflection;
 
-namespace RemoteProcedureCalls.StaticData.Data
+namespace RemoteProcedureCalls.StaticData.Models
 {
     internal class CallDelegateStaticData
     {

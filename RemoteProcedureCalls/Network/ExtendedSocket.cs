@@ -18,7 +18,7 @@ namespace RemoteProcedureCalls.Network
         private bool isThrowed;
         private Exception throwException;
 
-        public bool IsDisposed => isDisposed;
+        public bool IsClosed => isDisposed || isThrowed;
         public int ReceiveTimeout { get; set; } = -1;
         public int SendTimeout { get; set; } = -1;
 
@@ -79,7 +79,7 @@ namespace RemoteProcedureCalls.Network
         public byte[] Receive(byte channel = 0)
         {
             if (isThrowed) throw throwException;
-            if (IsDisposed) throw new ObjectDisposedException(GetType().FullName);
+            if (IsClosed) throw new ObjectDisposedException(GetType().FullName);
             if (inputData[channel].Count == 0) receiveAwait[channel].WaitOne(ReceiveTimeout);
             if (inputData[channel].TryDequeue(out byte[] data)) return data;
             throw new SocketException((int)SocketError.TimedOut);
@@ -87,7 +87,7 @@ namespace RemoteProcedureCalls.Network
 
         public void Send(byte[] data, byte channel = 0)
         {
-            if (IsDisposed) throw new ObjectDisposedException(GetType().FullName);
+            if (IsClosed) throw new ObjectDisposedException(GetType().FullName);
 
             lock (lockSend)
             {

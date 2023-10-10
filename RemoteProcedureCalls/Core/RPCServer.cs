@@ -1,7 +1,7 @@
 ﻿using RemoteProcedureCalls.Network;
-using RemoteProcedureCalls.Network.Data;
+using RemoteProcedureCalls.Network.Models;
 using RemoteProcedureCalls.StaticData;
-using RemoteProcedureCalls.StaticData.Data;
+using RemoteProcedureCalls.StaticData.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,7 +33,7 @@ namespace RemoteProcedureCalls.Core
         {
             Parallel.Invoke(() =>
             {
-                while (!socket.IsDisposed)
+                while (!socket.IsClosed)
                 {
                     CallObject callObject = socket.Receive<CallObject>(1);
                     object implementation = implementations[interfaces[callObject.InterfaceName]];
@@ -45,7 +45,7 @@ namespace RemoteProcedureCalls.Core
                         if (argTypes[i].IsAssignableTo(typeof(Delegate)))
                         {
                             int delegateIndex = JsonSerializer.Deserialize<int>(callObject.Arguments[i]);
-                            int dataIndex = StaticObject.SaveObject(new CallDelegateStaticData()
+                            int dataIndex = StaticDataService.SaveObject(new CallDelegateStaticData()
                             {
                                 Socket = socket,
                                 DelegateMethod = argTypes[i].GetMethod("Invoke"),
@@ -64,7 +64,7 @@ namespace RemoteProcedureCalls.Core
                     if (method.ReturnType == typeof(void)) continue;
                     if (result is Delegate)
                     {
-                        int index = StaticObject.SaveObject(typeof(Delegate), result);
+                        int index = StaticDataService.SaveObject(typeof(Delegate), result);
                         socket.Send(index, 1);
                         continue;
                     }
@@ -72,10 +72,10 @@ namespace RemoteProcedureCalls.Core
                 }
             }, () =>
             {
-                while (!socket.IsDisposed)
+                while (!socket.IsClosed)
                 {
                     CallDelegateObject callDelegateObject = socket.Receive<CallDelegateObject>(3);
-                    Delegate @delegate = StaticObject.GetObject<Delegate>(callDelegateObject.DelegateIndex);
+                    Delegate @delegate = StaticDataService.GetObject<Delegate>(callDelegateObject.DelegateIndex);
                     MethodInfo method = @delegate.GetMethodInfo();
                     Type[] argTypes = method.GetParameters().Select(p => p.ParameterType).ToArray();
                     object[] args = new object[callDelegateObject.Arguments.Length];
@@ -94,7 +94,7 @@ namespace RemoteProcedureCalls.Core
 
         internal static object CallDelegate(string delegateName, int dataIndex, object[] parameters)
         {
-            CallDelegateStaticData data = StaticObject.GetObject<CallDelegateStaticData>(dataIndex);
+            CallDelegateStaticData data = StaticDataService.GetObject<CallDelegateStaticData>(dataIndex);
             Type[] argTypes = data.DelegateMethod.GetParameters().Select(p => p.ParameterType).ToArray();
             CallDelegateObject callDelegateObject = new CallDelegateObject()
             {
@@ -134,5 +134,7 @@ namespace RemoteProcedureCalls.Core
         {
             server.Dispose();
         }
+
+        ~RPCServer() => Dispose();
     }
 }
