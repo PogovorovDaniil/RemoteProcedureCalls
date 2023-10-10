@@ -12,6 +12,7 @@ namespace TestClient
             var imp = client.GetImplementation<ITest>();
 
             Console.WriteLine(imp.Sum(40, 2));
+            Console.WriteLine(imp.Sum(1, 2, 3));
             Console.WriteLine(imp.Mul(2, 2));
             imp.Constant = 42;
 

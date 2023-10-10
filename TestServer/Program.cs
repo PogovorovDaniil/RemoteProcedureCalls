@@ -20,6 +20,7 @@ namespace TestServer
             }
         }
         public int Sum(int a, int b) => a + b;
+        public int Sum(int a, int b, int c) => a + b + c;
         public int Mul(int a, int b) => a * b;
 
         public void Act(Action<string> action)
@@ -40,7 +41,7 @@ namespace TestServer
         static void Main()
         {
             var server = new RPCServer();
-            server.AddImplementation<ITest>(new Test());
+            server.AddImplementation<ITest>(() => new Test());
             while (true) ;
         }
     }

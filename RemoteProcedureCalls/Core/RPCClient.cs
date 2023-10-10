@@ -15,17 +15,19 @@ namespace RemoteProcedureCalls.Core
     {
         private readonly ExtendedSocket socket;
         private readonly TypeFactory implementationFactory;
-        private readonly Dictionary<string, Type> interfaces;
+        private readonly Dictionary<int, Type> interfaces;
+        private readonly Dictionary<Type, MethodInfo[]> interfaceMethods;
         private readonly object lockObj;
         private readonly Thread callDelegateListener;
         public RPCClient(string address = "127.0.0.1", int port = 55278)
         {
-            interfaces = new Dictionary<string, Type>();
+            interfaces = new Dictionary<int, Type>();
+            interfaceMethods = new Dictionary<Type, MethodInfo[]>();
             lockObj = new object();
 
             socket = new Client().Connect($"{address}:{port}");
             implementationFactory = new TypeFactory(
-                (interfaceName, methodName, parameters) => Call(interfaceName, methodName, parameters));
+                (instanceIndex, methodIndex, parameters) => Call(instanceIndex, methodIndex, parameters));
 
             callDelegateListener = new Thread(CallDelegateListener);
             callDelegateListener.Start();
@@ -33,19 +35,32 @@ namespace RemoteProcedureCalls.Core
 
         public T GetImplementation<T>() where T : class
         {
-            if (!typeof(T).IsInterface) throw new ArgumentException();
-            interfaces.Add(typeof(T).Name, typeof(T));
-            return implementationFactory.Create<T>();
+            lock (lockObj)
+            {
+                if (!typeof(T).IsInterface) throw new ArgumentException();
+                socket.Send(typeof(T).Name, 0);
+                int index = socket.Receive<int>(0);
+                if (index < 0) throw new NotImplementedException();
+                if (!interfaces.ContainsKey(index))
+                {
+                    interfaces.Add(index, typeof(T));
+                    if (!interfaceMethods.ContainsKey(typeof(T)))
+                    {
+                        interfaceMethods[typeof(T)] = typeof(T).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    }
+                }
+                return implementationFactory.Create<T>(index);
+            }
         }
 
-        internal object Call(string interfaceName, string methodName, object[] parameters)
+        internal object Call(int instanceIndex, int methodIndex, object[] parameters)
         {
-            MethodInfo method = interfaces[interfaceName].GetMethod(methodName);
+            MethodInfo method = interfaceMethods[interfaces[instanceIndex]][methodIndex];
             Type[] argTypes = method.GetParameters().Select(p => p.ParameterType).ToArray();
             CallObject callObject = new CallObject()
             {
-                InterfaceName = interfaceName,
-                MethodName = methodName,
+                InstanceIndex = instanceIndex,
+                MethodIndex = methodIndex,
                 Arguments = new string[parameters.Length]
             };
             for (int i = 0; i < parameters.Length; i++)
@@ -84,13 +99,12 @@ namespace RemoteProcedureCalls.Core
             }
         }
 
-        internal static object CallDelegate(string delegateName, int dataIndex, object[] parameters)
+        internal static object CallDelegate(int dataIndex, object[] parameters)
         {
             CallDelegateStaticData data = StaticDataService.GetObject<CallDelegateStaticData>(dataIndex);
             Type[] argTypes = data.DelegateMethod.GetParameters().Select(p => p.ParameterType).ToArray();
             CallDelegateObject callDelegateObject = new CallDelegateObject()
             {
-                DelegateName = delegateName,
                 DelegateIndex = data.DelegateIndex,
                 Arguments = new string[parameters.Length]
             };
@@ -102,7 +116,11 @@ namespace RemoteProcedureCalls.Core
             lock (data.LockObject)
             {
                 data.Socket.Send(callDelegateObject, 3);
-                if (data.DelegateMethod.ReturnType == typeof(void)) return null;
+                if (data.DelegateMethod.ReturnType == typeof(void))
+                {
+                    data.Socket.Receive<int>(3);
+                    return null;
+                }
                 else if (data.DelegateMethod.ReturnType.IsAssignableTo(typeof(Delegate)))
                 {
                     throw new NotSupportedException();
@@ -131,8 +149,8 @@ namespace RemoteProcedureCalls.Core
                 }
                 object result = method.Invoke(@delegate.Target, args);
                 if (result is Delegate) throw new NotSupportedException();
-                if (method.ReturnType == typeof(void)) continue;
-                socket.Send(result, method.ReturnType, 2);
+                if (method.ReturnType == typeof(void)) socket.Send(1, 2);
+                else socket.Send(result, method.ReturnType, 2);
             }
         }
 

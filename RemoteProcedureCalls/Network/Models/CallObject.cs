@@ -2,8 +2,8 @@
 {
     internal class CallObject
     {
-        public string InterfaceName { get; set; }
-        public string MethodName { get; set; }
+        public int InstanceIndex { get; set; }
+        public int MethodIndex { get; set; }
         public string[] Arguments { get; set; }
     }
 }

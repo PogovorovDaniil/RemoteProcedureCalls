@@ -15,13 +15,19 @@ namespace RemoteProcedureCalls.Core
     {
         private readonly Server server;
         private readonly TypeFactory implementationFactory;
-        private readonly Dictionary<Type, object> implementations;
-        private readonly Dictionary<string, Type> interfaces;
+        private readonly Dictionary<Type, Func<object>> implementations;
+        private readonly Dictionary<string, Type> interfaceNames;
+        private readonly Dictionary<int, Type> interfaces;
+        private readonly Dictionary<Type, MethodInfo[]> interfaceMethods;
+        private readonly List<object> instances;
 
         public RPCServer(int port = 55278)
         {
-            implementations = new Dictionary<Type, object>();
-            interfaces = new Dictionary<string, Type>();
+            implementations = new Dictionary<Type, Func<object>>();
+            interfaceNames = new Dictionary<string, Type>();
+            interfaces = new Dictionary<int, Type>();
+            interfaceMethods = new Dictionary<Type, MethodInfo[]>();
+            instances = new List<object>();
 
             server = new Server($"0.0.0.0:{port}");
             server.OnClientConnected += Server_OnClientConnected;
@@ -35,9 +41,34 @@ namespace RemoteProcedureCalls.Core
             {
                 while (!socket.IsClosed)
                 {
+                    string interfaceName = socket.Receive<string>(0);
+                    if(!interfaceNames.ContainsKey(interfaceName))
+                    {
+                        socket.Send(-1, 0);
+                        continue;
+                    }
+                    object instance = implementations[interfaceNames[interfaceName]]();
+                    int index = instances.IndexOf(instance);
+                    interfaces[index < 0 ? instances.Count : index] = interfaceNames[interfaceName];
+                    if (!interfaceMethods.ContainsKey(interfaceNames[interfaceName]))
+                    {
+                        interfaceMethods[interfaceNames[interfaceName]] = interfaceNames[interfaceName].GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    }
+                    if (index >= 0)
+                    {
+                        socket.Send(index, 0);
+                        continue;
+                    }
+                    socket.Send(instances.Count, 0);
+                    instances.Add(instance);
+                }
+            }, () =>
+            {
+                while (!socket.IsClosed)
+                {
                     CallObject callObject = socket.Receive<CallObject>(1);
-                    object implementation = implementations[interfaces[callObject.InterfaceName]];
-                    MethodInfo method = implementation.GetType().GetMethod(callObject.MethodName);
+                    object implementation = instances[callObject.InstanceIndex];
+                    MethodInfo method = interfaceMethods[interfaces[callObject.InstanceIndex]][callObject.MethodIndex];
                     Type[] argTypes = method.GetParameters().Select(p => p.ParameterType).ToArray();
                     object[] args = new object[callObject.Arguments.Length];
                     for (int i = 0; i < callObject.Arguments.Length; i++)
@@ -86,19 +117,18 @@ namespace RemoteProcedureCalls.Core
                     }
                     object result = method.Invoke(@delegate.Target, args);
                     if (result is Delegate) throw new NotSupportedException();
-                    if (method.ReturnType == typeof(void)) continue;
-                    socket.Send(result, method.ReturnType, 3);
+                    if (method.ReturnType == typeof(void)) socket.Send(1, 3);
+                    else socket.Send(result, method.ReturnType, 3);
                 }
             });
         }
 
-        internal static object CallDelegate(string delegateName, int dataIndex, object[] parameters)
+        internal static object CallDelegate(int dataIndex, object[] parameters)
         {
             CallDelegateStaticData data = StaticDataService.GetObject<CallDelegateStaticData>(dataIndex);
             Type[] argTypes = data.DelegateMethod.GetParameters().Select(p => p.ParameterType).ToArray();
             CallDelegateObject callDelegateObject = new CallDelegateObject()
             {
-                DelegateName = delegateName,
                 DelegateIndex = data.DelegateIndex,
                 Arguments = new string[parameters.Length]
             };
@@ -110,7 +140,11 @@ namespace RemoteProcedureCalls.Core
             lock (data.LockObject)
             {
                 data.Socket.Send(callDelegateObject, 2);
-                if (data.DelegateMethod.ReturnType == typeof(void)) return null;
+                if (data.DelegateMethod.ReturnType == typeof(void))
+                {
+                    data.Socket.Receive<int>(2);
+                    return null;
+                }
                 else if (data.DelegateMethod.ReturnType.IsAssignableTo(typeof(Delegate)))
                 {
                     throw new NotSupportedException();
@@ -123,10 +157,10 @@ namespace RemoteProcedureCalls.Core
             }
         }
 
-        public void AddImplementation<TInterface>(TInterface implementation) where TInterface : class
+        public void AddImplementation<TInterface>(Func<object> implementation) where TInterface : class
         {
             if (implementations.Any(x => x.Key.Name == typeof(TInterface).Name)) throw new ArgumentException("Интерфейс с таким именем уже определён");
-            interfaces[typeof(TInterface).Name] = typeof(TInterface);
+            interfaceNames[typeof(TInterface).Name] = typeof(TInterface);
             implementations[typeof(TInterface)] = implementation;
         }
 
