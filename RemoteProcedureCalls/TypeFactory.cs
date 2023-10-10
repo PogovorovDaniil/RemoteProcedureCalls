@@ -6,28 +6,28 @@ using System.Reflection.Emit;
 
 namespace RemoteProcedureCalls
 {
-    public class ImplementationFactory
+    // TODO IEnumerable
+    public class TypeFactory
     {
         private static readonly AssemblyBuilder assembly;
         private static readonly ModuleBuilder module;
         private static readonly Dictionary<Type, TypeBuilder> definedTypes;
         private static readonly List<Type> returnTypes;
         private static string randomName => Guid.NewGuid().ToString();
-        static ImplementationFactory()
+        static TypeFactory()
         {
             assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName(randomName), AssemblyBuilderAccess.Run);
             module = assembly.DefineDynamicModule(randomName);
             definedTypes = new Dictionary<Type, TypeBuilder>();
             returnTypes = new List<Type>();
         }
-
-        public delegate object CallHandler(string interfaceName, string methodName, object[] parameters);
-        private readonly CallHandler callHandler;
-        public ImplementationFactory(CallHandler callHandler)
+        public delegate object MethodHandler(string interfaceName, string methodName, object[] parameters); 
+        public delegate object DelegateHandler(string delegateName, int index, object[] parameters);
+        private readonly MethodHandler methodHandler;
+        public TypeFactory(MethodHandler methodHandler)
         {
-            this.callHandler = callHandler;
+            this.methodHandler = methodHandler;
         }
-
         private TypeBuilder CreateType<T>() where T : class
         {
             if (definedTypes.TryGetValue(typeof(T), out var builder)) return builder;
@@ -35,7 +35,7 @@ namespace RemoteProcedureCalls
             TypeBuilder typeBuilder = module.DefineType(randomName);
             typeBuilder.AddInterfaceImplementation(typeof(T));
 
-            FieldBuilder factoryField = typeBuilder.DefineField("factory", typeof(ImplementationFactory), FieldAttributes.Public);
+            FieldBuilder factoryField = typeBuilder.DefineField("factory", typeof(TypeFactory), FieldAttributes.Public);
 
             foreach (var method in typeof(T).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
             {
@@ -45,7 +45,6 @@ namespace RemoteProcedureCalls
             typeBuilder.CreateType();
             return typeBuilder;
         }
-
         private MethodBuilder CreateMethod(MethodInfo method, TypeBuilder typeBuilder, Type interfaceType, FieldBuilder factoryField)
         {
             MethodBuilder methodBuilder = typeBuilder.DefineMethod(method.Name, MethodAttributes.Public | MethodAttributes.Virtual);
@@ -63,20 +62,18 @@ namespace RemoteProcedureCalls
             il.Emit(OpCodes.Ldc_I4, parameterInfos.Length);
             il.Emit(OpCodes.Newarr, typeof(object));
 
-            int paramIndex = 0;
-            foreach (var parameter in parameterInfos)
+            for (int i = 0; i < parameterInfos.Length; i++)
             {
                 il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Ldc_I4, paramIndex);
-                il.Emit(OpCodes.Ldarg, paramIndex + 1);
-                paramIndex++;
-                if (parameter.ParameterType.IsValueType)
+                il.Emit(OpCodes.Ldc_I4, i);
+                il.Emit(OpCodes.Ldarg, i + 1);
+                if (parameterInfos[i].ParameterType.IsValueType)
                 {
-                    il.Emit(OpCodes.Box, parameter.ParameterType);
+                    il.Emit(OpCodes.Box, parameterInfos[i].ParameterType);
                 }
                 il.Emit(OpCodes.Stelem_Ref);
             }
-            il.EmitCall(OpCodes.Call, GetType().GetMethod(nameof(AnyMethod)), null);
+            il.EmitCall(OpCodes.Call, GetType().GetMethod(nameof(MethodInvoke)), null);
             if (method.ReturnType == typeof(void))
             {
                 il.Emit(OpCodes.Pop);
@@ -88,8 +85,7 @@ namespace RemoteProcedureCalls
             il.Emit(OpCodes.Ret);
             return methodBuilder;
         }
-
-        public object AnyMethod(string interfaceName, string methodName, object[] parameters) => callHandler(interfaceName, methodName, parameters);
+        public object MethodInvoke(string interfaceName, string methodName, object[] parameters) => methodHandler(interfaceName, methodName, parameters);
         public static Type GetReturnType(int index) => returnTypes[index];
 
         public T Create<T>() where T : class
@@ -99,6 +95,36 @@ namespace RemoteProcedureCalls
             T value = (T)assembly.CreateInstance(type.Name);
             type.GetField("factory").SetValue(value, this);
             return value;
+        }
+        public T CreateDelegate<T>(DelegateHandler handler, int dataIndex) where T : Delegate => (T)CreateDelegate(typeof(T), handler, dataIndex);
+        public object CreateDelegate(Type type, DelegateHandler handler, int dataIndex)
+        {
+            var methodInfo = type.GetMethod("Invoke");
+            var parameterInfos = methodInfo.GetParameters();
+
+            var method = new DynamicMethod("myDynamicMethod", methodInfo.ReturnType, parameterInfos.Select(x => x.ParameterType).ToArray());
+            var il = method.GetILGenerator();
+
+            il.Emit(OpCodes.Ldstr, type.Name);
+            il.Emit(OpCodes.Ldc_I4, dataIndex);
+
+            il.Emit(OpCodes.Ldc_I4, parameterInfos.Length);
+            il.Emit(OpCodes.Newarr, typeof(object));
+
+            for (int i = 0; i < parameterInfos.Length; i++)
+            {
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4, i);
+                il.Emit(OpCodes.Ldarg, i);
+                if (parameterInfos[i].ParameterType.IsValueType) il.Emit(OpCodes.Box, parameterInfos[i].ParameterType);
+                il.Emit(OpCodes.Stelem_Ref);
+            }
+            il.EmitCall(OpCodes.Call, handler.Method, null);
+            if (methodInfo.ReturnType == typeof(void)) il.Emit(OpCodes.Pop);
+            else if (methodInfo.ReturnType.IsValueType) il.Emit(OpCodes.Unbox_Any, methodInfo.ReturnType);
+            il.Emit(OpCodes.Ret);
+
+            return method.CreateDelegate(type);
         }
     }
 }

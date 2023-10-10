@@ -1,26 +1,33 @@
 ﻿using RemoteProcedureCalls.DataObjects;
 using RemoteProcedureCalls.Network;
+using RemoteProcedureCalls.StaticData;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 
 namespace RemoteProcedureCalls
 {
     public class RPCClient : IDisposable
     {
         private readonly ExtendedSocket socket;
-        private readonly ImplementationFactory implementationFactory;
+        private readonly TypeFactory implementationFactory;
         private readonly Dictionary<string, Type> interfaces;
         private readonly object lockObj;
+        private readonly Thread callDelegateListener;
         public RPCClient(string address = "127.0.0.1", int port = 55278)
         {
             interfaces = new Dictionary<string, Type>();
             lockObj = new object();
 
             socket = new Client().Connect($"{address}:{port}");
-            implementationFactory = new ImplementationFactory((interfaceName, methodName, parameters) => Call(interfaceName, methodName, parameters));
+            implementationFactory = new TypeFactory(
+                (interfaceName, methodName, parameters) => Call(interfaceName, methodName, parameters));
+
+            callDelegateListener = new Thread(CallDelegateListener);
+            callDelegateListener.Start();
         }
 
         public T GetImplementation<T>() where T : class
@@ -30,7 +37,7 @@ namespace RemoteProcedureCalls
             return implementationFactory.Create<T>();
         }
 
-        public object Call(string interfaceName, string methodName, object[] parameters)
+        internal object Call(string interfaceName, string methodName, object[] parameters)
         {
             MethodInfo method = interfaces[interfaceName].GetMethod(methodName);
             Type[] argTypes = method.GetParameters().Select(p => p.ParameterType).ToArray();
@@ -42,14 +49,89 @@ namespace RemoteProcedureCalls
             };
             for (int i = 0; i < parameters.Length; i++)
             {
-                callObject.Arguments[i] = JsonSerializer.Serialize(parameters[i], argTypes[i]);
+                if (argTypes[i].IsAssignableTo(typeof(Delegate)))
+                {
+                    int index = StaticObject.SaveObject(typeof(Delegate), parameters[i]);
+                    callObject.Arguments[i] = JsonSerializer.Serialize(index, typeof(int));
+                }
+                else
+                {
+                    callObject.Arguments[i] = JsonSerializer.Serialize(parameters[i], argTypes[i]);
+                }
             }
             lock (lockObj)
             {
-                socket.Send(callObject);
+                socket.Send(callObject, 1);
                 if (method.ReturnType == typeof(void)) return null;
-                object result = socket.Receive(method.ReturnType);
-                return result;
+                else if (method.ReturnType.IsAssignableTo(typeof(Delegate)))
+                {
+                    int delegateIndex = socket.Receive<int>(1);
+                    int dataIndex = StaticObject.SaveObject(new CallDelegateStaticData()
+                    {
+                        DelegateIndex = delegateIndex,
+                        DelegateMethod = method.ReturnType.GetMethod("Invoke"),
+                        LockObject = new object(),
+                        Socket = socket,
+                    });
+                    return implementationFactory.CreateDelegate(method.ReturnType, CallDelegate, dataIndex);
+                }
+                else
+                {
+                    object result = socket.Receive(method.ReturnType, 1);
+                    return result;
+                }
+            }
+        }
+
+        internal static object CallDelegate(string delegateName, int dataIndex, object[] parameters)
+        {
+            CallDelegateStaticData data = StaticObject.GetObject<CallDelegateStaticData>(dataIndex);
+            Type[] argTypes = data.DelegateMethod.GetParameters().Select(p => p.ParameterType).ToArray();
+            CallDelegateObject callDelegateObject = new CallDelegateObject()
+            {
+                DelegateName = delegateName,
+                DelegateIndex = data.DelegateIndex,
+                Arguments = new string[parameters.Length]
+            };
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                if (argTypes[i].IsAssignableTo(typeof(Delegate))) throw new NotSupportedException();
+                callDelegateObject.Arguments[i] = JsonSerializer.Serialize(parameters[i], argTypes[i]);
+            }
+            lock (data.LockObject)
+            {
+                data.Socket.Send(callDelegateObject, 3);
+                if (data.DelegateMethod.ReturnType == typeof(void)) return null;
+                else if (data.DelegateMethod.ReturnType.IsAssignableTo(typeof(Delegate)))
+                {
+                    throw new NotSupportedException();
+                }
+                else
+                {
+                    object result = data.Socket.Receive(data.DelegateMethod.ReturnType, 3);
+                    return result;
+                }
+            }
+        }
+
+        private void CallDelegateListener()
+        {
+            while (!socket.IsDisposed)
+            {
+                CallDelegateObject callDelegateObject = socket.Receive<CallDelegateObject>(2);
+                Delegate @delegate = StaticObject.GetObject<Delegate>(callDelegateObject.DelegateIndex);
+                MethodInfo method = @delegate.GetMethodInfo();
+                Type[] argTypes = method.GetParameters().Select(p => p.ParameterType).ToArray();
+                object[] args = new object[callDelegateObject.Arguments.Length];
+                for (int i = 0; i < callDelegateObject.Arguments.Length; i++)
+                {
+                    if (argTypes[i].IsAssignableTo(typeof(Delegate))) throw new NotSupportedException();
+                    args[i] = JsonSerializer.Deserialize(callDelegateObject.Arguments[i], argTypes[i]);
+                }
+                object result = method.Invoke(@delegate.Target, args);
+                if (result is Delegate) throw new NotSupportedException();
+                if (method.ReturnType == typeof(void)) continue;
+                socket.Send(result, method.ReturnType, 2);
             }
         }
 
@@ -57,5 +139,7 @@ namespace RemoteProcedureCalls
         {
             socket.Dispose();
         }
+
+        ~RPCClient() => Dispose();
     }
 }

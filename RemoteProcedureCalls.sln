@@ -5,9 +5,9 @@ VisualStudioVersion = 17.5.33530.505
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RemoteProcedureCalls", "RemoteProcedureCalls\RemoteProcedureCalls.csproj", "{0E22C559-7F47-41EE-A23D-065695FBC769}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestClient", "TestClient\TestClient.csproj", "{A37E8AF8-1C5A-471A-82A2-4BB91D09D983}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestClient", "TestClient\TestClient.csproj", "{A37E8AF8-1C5A-471A-82A2-4BB91D09D983}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestServer", "TestServer\TestServer.csproj", "{64B3A878-504D-4C3E-A0D7-7608ED28080F}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestServer", "TestServer\TestServer.csproj", "{64B3A878-504D-4C3E-A0D7-7608ED28080F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
