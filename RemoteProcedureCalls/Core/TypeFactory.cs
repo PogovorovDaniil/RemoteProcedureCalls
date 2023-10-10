@@ -9,30 +9,29 @@ namespace RemoteProcedureCalls.Core
     // TODO IEnumerable
     public class TypeFactory
     {
-        private static readonly AssemblyBuilder assembly;
-        private static readonly ModuleBuilder module;
-        private static readonly Dictionary<Type, TypeBuilder> definedTypes;
-        private static readonly List<Type> returnTypes;
-        private static string randomName => Guid.NewGuid().ToString();
-        static TypeFactory()
-        {
-            assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName(randomName), AssemblyBuilderAccess.Run);
-            module = assembly.DefineDynamicModule(randomName);
-            definedTypes = new Dictionary<Type, TypeBuilder>();
-            returnTypes = new List<Type>();
-        }
-        public delegate object MethodHandler(int instanceField, int methodIndex, object[] parameters);
-        public delegate object DelegateHandler(int index, object[] parameters);
+        private readonly AssemblyBuilder assembly;
+        private readonly ModuleBuilder module;
+        private readonly Dictionary<Type, TypeBuilder> definedTypes;
+        private readonly List<Type> returnTypes;
+        private static string RandomName => Guid.NewGuid().ToString();
+
+        public delegate object MethodHandler(int instanceIndex, int methodIndex, object[] parameters);
         private readonly MethodHandler methodHandler;
+
+        public delegate object DelegateHandler(int dataIndex, object[] parameters);
         public TypeFactory(MethodHandler methodHandler)
         {
+            assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName(RandomName), AssemblyBuilderAccess.Run);
+            module = assembly.DefineDynamicModule(RandomName);
+            definedTypes = new Dictionary<Type, TypeBuilder>();
+            returnTypes = new List<Type>();
             this.methodHandler = methodHandler;
         }
         private TypeBuilder CreateType<T>(int instanceIndex) where T : class
         {
             if (definedTypes.TryGetValue(typeof(T), out var builder)) return builder;
 
-            TypeBuilder typeBuilder = module.DefineType(randomName);
+            TypeBuilder typeBuilder = module.DefineType(RandomName);
             typeBuilder.AddInterfaceImplementation(typeof(T));
 
             FieldBuilder factoryField = typeBuilder.DefineField("factory", typeof(TypeFactory), FieldAttributes.Public);
@@ -40,14 +39,14 @@ namespace RemoteProcedureCalls.Core
             int methodIndex = 0;
             foreach (var method in typeof(T).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
             {
-                MethodBuilder methodBuilder = CreateMethod(method, typeBuilder, typeof(T), factoryField, instanceIndex, methodIndex);
+                MethodBuilder methodBuilder = CreateMethod(method, typeBuilder, factoryField, instanceIndex, methodIndex);
                 typeBuilder.DefineMethodOverride(methodBuilder, method);
                 methodIndex++;
             }
             typeBuilder.CreateType();
             return typeBuilder;
         }
-        private MethodBuilder CreateMethod(MethodInfo method, TypeBuilder typeBuilder, Type interfaceType, FieldBuilder factoryField, int instanceIndex, int methodIndex)
+        private MethodBuilder CreateMethod(MethodInfo method, TypeBuilder typeBuilder, FieldBuilder factoryField, int instanceIndex, int methodIndex)
         {
             MethodBuilder methodBuilder = typeBuilder.DefineMethod(method.Name, MethodAttributes.Public | MethodAttributes.Virtual);
             ILGenerator il = methodBuilder.GetILGenerator();
@@ -89,7 +88,6 @@ namespace RemoteProcedureCalls.Core
             return methodBuilder;
         }
         public object MethodInvoke(int instanceIndex, int methodIndex, object[] parameters) => methodHandler(instanceIndex, methodIndex, parameters);
-        public static Type GetReturnType(int index) => returnTypes[index];
 
         public T Create<T>(int instanceIndex) where T : class
         {
@@ -99,7 +97,6 @@ namespace RemoteProcedureCalls.Core
             type.GetField("factory").SetValue(value, this);
             return value;
         }
-        public T CreateDelegate<T>(DelegateHandler handler, int dataIndex) where T : Delegate => (T)CreateDelegate(typeof(T), handler, dataIndex);
         public object CreateDelegate(Type type, DelegateHandler handler, int dataIndex)
         {
             var methodInfo = type.GetMethod("Invoke");
