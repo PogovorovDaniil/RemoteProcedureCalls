@@ -68,6 +68,7 @@ namespace RemoteProcedureCalls.Network
                     break;
                 }
             }
+            Dispose();
         }
 
         public byte[] Receive(byte channel = 0)

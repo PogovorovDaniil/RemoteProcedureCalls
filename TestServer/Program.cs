@@ -24,9 +24,7 @@ namespace TestServer
 
         public void Act(Action<string> action)
         {
-            Console.WriteLine("Start");
             action("WoW, Text!");
-            Console.WriteLine("End");
         }
     }
 
@@ -45,6 +43,8 @@ namespace TestServer
         static void Main()
         {
             var server = new RPCServer();
+            server.OnClientConnected += Server_OnClientConnected;
+            server.OnClientClosed += Server_OnClientClosed;
             int index = 0;
             List<Test> tests = new List<Test>();
             server.AddImplementation<ITest>(() => 
@@ -63,6 +63,16 @@ namespace TestServer
                     test.Call();
                 }
             }
+        }
+
+        private static void Server_OnClientConnected(string obj)
+        {
+            Console.WriteLine($"Client connected");
+        }
+
+        private static void Server_OnClientClosed(string obj)
+        {
+            Console.WriteLine($"Client closed");
         }
     }
 }

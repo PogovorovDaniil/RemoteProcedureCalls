@@ -5,6 +5,7 @@ using RemoteProcedureCalls.StaticData.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Text.Json;
 
@@ -12,6 +13,17 @@ namespace RemoteProcedureCalls.Core
 {
     internal static class ProtocolMethods
     {
+        internal static void TryTimeout(Action action)
+        {
+            try
+            {
+                action();
+            }
+            catch(SocketException ex)
+            {
+                if (ex.SocketErrorCode != SocketError.TimedOut) throw;
+            }
+        }
         internal static void GetImplementation(
             ExtendedSocket socket, 
             Dictionary<string, Type> interfaceNames, 
@@ -128,6 +140,8 @@ namespace RemoteProcedureCalls.Core
             }
             lock (data.LockObject)
             {
+                if(data.Socket.IsClosed) return data.DelegateMethod.ReturnType.IsValueType ? 0 : null;
+
                 data.Socket.Send(callDelegateObject, channel);
                 if (data.DelegateMethod.ReturnType == typeof(void))
                 {

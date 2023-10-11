@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Threading.Tasks;
 
@@ -16,6 +17,8 @@ namespace RemoteProcedureCalls.Core
         private readonly Dictionary<int, Type> interfaces;
         private readonly Dictionary<Type, MethodInfo[]> interfaceMethods;
         private readonly List<object> instances;
+        public event Action<string> OnClientConnected;
+        public event Action<string> OnClientClosed;
 
         public RPCServer(int port = 55278)
         {
@@ -33,10 +36,12 @@ namespace RemoteProcedureCalls.Core
 
         private void Server_OnClientConnected(ExtendedSocket socket)
         {
+            OnClientConnected?.Invoke("");
             Parallel.Invoke(
-                () => ProtocolMethods.GetImplementation(socket, interfaceNames, implementations, interfaces, interfaceMethods, instances, 0),
-                () => ProtocolMethods.CallMethodHandler(socket, implementationFactory, CallDelegate, interfaces, interfaceMethods, instances, 1),
-                () => ProtocolMethods.CallDelegateHandler(socket, 3));
+                () => ProtocolMethods.TryTimeout(() => ProtocolMethods.GetImplementation(socket, interfaceNames, implementations, interfaces, interfaceMethods, instances, 0)),
+                () => ProtocolMethods.TryTimeout(() => ProtocolMethods.CallMethodHandler(socket, implementationFactory, CallDelegate, interfaces, interfaceMethods, instances, 1)),
+                () => ProtocolMethods.TryTimeout(() => ProtocolMethods.CallDelegateHandler(socket, 3)));
+            OnClientClosed?.Invoke("");
         }
 
         internal static object CallDelegate(int dataIndex, object[] parameters) => ProtocolMethods.CallDelegate(dataIndex, 2, parameters);
