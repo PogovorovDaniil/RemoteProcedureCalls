@@ -1,24 +1,23 @@
 ﻿using RemoteProcedureCalls.Core;
 using System;
+using System.Collections.Generic;
+using System.Threading;
 using TestCore;
 
 namespace TestServer
 {
     public class Test : ITest
     {
-        private int _value;
-        public int Value
+        public Test(int index) 
         {
-            get
-            {
-                return _value;
-            }
-            set
-            {
-                _value = value;
-                Console.WriteLine(_value);
-            }
+            Value = index;
         }
+        public event Action<string> OnCall;
+        public void Call()
+        {
+            OnCall?.Invoke(Value.ToString());
+        }
+        public int Value { get; set; }
         public int Sum(int a, int b) => a + b;
         public int Sum(int a, int b, int c) => a + b + c;
         public int Mul(int a, int b) => a * b;
@@ -28,12 +27,6 @@ namespace TestServer
             Console.WriteLine("Start");
             action("WoW, Text!");
             Console.WriteLine("End");
-        }
-
-        public Func<int, int, int> GetSum()
-        {
-            Console.WriteLine("GetSum");
-            return (a, b) => a + b;
         }
     }
 
@@ -52,10 +45,24 @@ namespace TestServer
         static void Main()
         {
             var server = new RPCServer();
-            server.AddImplementation<ITest>(() => new Test());
+            int index = 0;
+            List<Test> tests = new List<Test>();
+            server.AddImplementation<ITest>(() => 
+            {
+                Test test = new Test(index++);
+                tests.Add(test);
+                return test;
+            });
             var counter = new MyCounter();
             server.AddImplementation<ICounter>(() => counter);
-            while (true) ;
+            while (true)
+            {
+                Thread.Sleep(1000);
+                foreach(Test test in tests)
+                {
+                    test.Call();
+                }
+            }
         }
     }
 }

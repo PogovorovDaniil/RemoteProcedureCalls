@@ -22,14 +22,19 @@ namespace TestClient
                 Console.WriteLine(text);
                 Console.ResetColor();
             });
-            Console.WriteLine(test.GetSum()(30, 6));
+            test.OnCall += Test_OnCall;
 
             var counter = client.GetImplementation<ICounter>();
             counter.Clear();
-            while (true)
+            for(int i = 0; i < 10; i++)
             {
                 Console.WriteLine(counter.Counter);
             }
+        }
+
+        private static void Test_OnCall(string text)
+        {
+            Console.WriteLine("Tururu {0}", text);
         }
     }
 }

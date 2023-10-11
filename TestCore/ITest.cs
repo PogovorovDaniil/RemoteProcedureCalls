@@ -7,6 +7,6 @@
         int Mul(int a, int b);
         int Value { get; set; }
         void Act(Action<string> action);
-        Func<int, int, int> GetSum();
+        event Action<string> OnCall;
     }
 }
