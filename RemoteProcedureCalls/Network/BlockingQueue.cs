@@ -26,7 +26,7 @@ namespace RemoteProcedureCalls.Network
         {
             lock (lockObject)
             {
-                while (queue.Count == 0)
+                if (queue.Count == 0)
                 {
                     Monitor.Wait(lockObject);
                 }

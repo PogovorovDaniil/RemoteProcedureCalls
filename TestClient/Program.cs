@@ -25,6 +25,7 @@ namespace TestClient
             Console.WriteLine(test.GetSum()(30, 6));
 
             var counter = client.GetImplementation<ICounter>();
+            counter.Clear();
             while (true)
             {
                 Console.WriteLine(counter.Counter);
