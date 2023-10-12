@@ -1,12 +1,7 @@
 ﻿using RemoteProcedureCalls.Network;
-using RemoteProcedureCalls.Network.Models;
-using RemoteProcedureCalls.StaticData;
-using RemoteProcedureCalls.StaticData.Models;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Text.Json;
 using System.Threading;
 
 namespace RemoteProcedureCalls.Core
@@ -17,13 +12,13 @@ namespace RemoteProcedureCalls.Core
         private readonly TypeFactory implementationFactory;
         private readonly Dictionary<int, Type> interfaces;
         private readonly Dictionary<Type, MethodInfo[]> interfaceMethods;
-        private readonly object lockObj;
+        private readonly object lockObject;
         private readonly Thread callDelegateListener;
         public RPCClient(string address = "127.0.0.1", int port = 55278)
         {
             interfaces = new Dictionary<int, Type>();
             interfaceMethods = new Dictionary<Type, MethodInfo[]>();
-            lockObj = new object();
+            lockObject = new object();
 
             socket = new Client().Connect($"{address}:{port}");
             implementationFactory = new TypeFactory(CallMethod);
@@ -34,7 +29,7 @@ namespace RemoteProcedureCalls.Core
 
         public T GetImplementation<T>() where T : class
         {
-            lock (lockObj)
+            lock (lockObject)
             {
                 if (!typeof(T).IsInterface) throw new ArgumentException();
                 socket.Send(typeof(T).Name, 0);
@@ -52,53 +47,9 @@ namespace RemoteProcedureCalls.Core
             }
         }
 
-        internal object CallMethod(int instanceIndex, int methodIndex, object[] parameters)
-        {
-            MethodInfo method = interfaceMethods[interfaces[instanceIndex]][methodIndex];
-            Type[] argTypes = method.GetParameters().Select(p => p.ParameterType).ToArray();
-            CallObject callObject = new CallObject()
-            {
-                InstanceIndex = instanceIndex,
-                MethodIndex = methodIndex,
-                Arguments = new string[parameters.Length]
-            };
-            for (int i = 0; i < parameters.Length; i++)
-            {
-                if (argTypes[i].IsAssignableTo(typeof(Delegate)))
-                {
-                    int index = StaticDataService.SaveObject(typeof(Delegate), parameters[i]);
-                    callObject.Arguments[i] = JsonSerializer.Serialize(index, typeof(int));
-                }
-                else
-                {
-                    callObject.Arguments[i] = JsonSerializer.Serialize(parameters[i], argTypes[i]);
-                }
-            }
-            lock (lockObj)
-            {
-                socket.Send(callObject, 1);
-                if (method.ReturnType == typeof(void)) return null;
-                else if (method.ReturnType.IsAssignableTo(typeof(Delegate)))
-                {
-                    int delegateIndex = socket.Receive<int>(1);
-                    int dataIndex = StaticDataService.SaveObject(new CallDelegateStaticData()
-                    {
-                        DelegateIndex = delegateIndex,
-                        DelegateMethod = method.ReturnType.GetMethod("Invoke"),
-                        LockObject = new object(),
-                        Socket = socket,
-                    });
-                    return implementationFactory.CreateDelegate(method.ReturnType, CallDelegate, dataIndex);
-                }
-                else
-                {
-                    object result = socket.Receive(method.ReturnType, 1);
-                    return result;
-                }
-            }
-        }
+        internal object CallMethod(int instanceIndex, int methodIndex, object[] parameters) => ProtocolMethods.CallMethod(socket, implementationFactory, CallDelegate, interfaces, interfaceMethods, lockObject, instanceIndex, methodIndex, parameters, 1);
 
-        internal static object CallDelegate(int dataIndex, object[] parameters) => ProtocolMethods.CallDelegate(dataIndex, 3, parameters);
+        internal static object CallDelegate(int dataIndex, object[] parameters) => ProtocolMethods.CallDelegate(dataIndex, parameters, 3);
 
         private void CallDelegateListener()
         {

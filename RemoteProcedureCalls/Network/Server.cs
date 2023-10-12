@@ -61,7 +61,7 @@ namespace RemoteProcedureCalls.Network
             {
                 OnClientConnected?.Invoke(client);
             }
-            catch (Exception) { }
+            catch (ExtendedSocketClosedException) { }
         }
 
         public void Dispose()
@@ -74,5 +74,7 @@ namespace RemoteProcedureCalls.Network
 
             listenerThread.Join();
         }
+
+        ~Server() => Dispose();
     }
 }

@@ -5,8 +5,8 @@ namespace RemoteProcedureCalls.Network
 {
     public class BlockingQueue<T>
     {
-        private Queue<T> queue = new Queue<T>();
-        private object lockObject = new object();
+        private readonly Queue<T> queue = new Queue<T>();
+        private readonly object lockObject = new object();
 
         public void Unlock()
         {
@@ -26,10 +26,7 @@ namespace RemoteProcedureCalls.Network
         {
             lock (lockObject)
             {
-                if (queue.Count == 0)
-                {
-                    Monitor.Wait(lockObject);
-                }
+                if (queue.Count == 0) Monitor.Wait(lockObject);
                 return queue.TryDequeue(out data);
             }
         }

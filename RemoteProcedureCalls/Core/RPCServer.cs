@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Sockets;
 using System.Reflection;
 using System.Threading.Tasks;
 
@@ -38,13 +37,13 @@ namespace RemoteProcedureCalls.Core
         {
             OnClientConnected?.Invoke("");
             Parallel.Invoke(
-                () => ProtocolMethods.TryTimeout(() => ProtocolMethods.GetImplementation(socket, interfaceNames, implementations, interfaces, interfaceMethods, instances, 0)),
-                () => ProtocolMethods.TryTimeout(() => ProtocolMethods.CallMethodHandler(socket, implementationFactory, CallDelegate, interfaces, interfaceMethods, instances, 1)),
-                () => ProtocolMethods.TryTimeout(() => ProtocolMethods.CallDelegateHandler(socket, 3)));
+                () => ProtocolMethods.GetImplementationHandler(socket, interfaceNames, implementations, interfaces, interfaceMethods, instances, 0),
+                () => ProtocolMethods.CallMethodHandler(socket, implementationFactory, CallDelegate, interfaces, interfaceMethods, instances, 1),
+                () => ProtocolMethods.CallDelegateHandler(socket, 3));
             OnClientClosed?.Invoke("");
         }
 
-        internal static object CallDelegate(int dataIndex, object[] parameters) => ProtocolMethods.CallDelegate(dataIndex, 2, parameters);
+        internal static object CallDelegate(int dataIndex, object[] parameters) => ProtocolMethods.CallDelegate(dataIndex, parameters, 2);
 
         public void AddImplementation<TInterface>(Func<object> implementation) where TInterface : class
         {

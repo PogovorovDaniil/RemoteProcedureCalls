@@ -8,38 +8,28 @@ namespace RemoteProcedureCalls.Network
     internal class ExtendedSocket : IDisposable
     {
         private readonly Socket socket;
-        private readonly BlockingQueue<byte[]>[] inputData;
-        private readonly Thread receiveThread;
+        private readonly BlockingQueue<byte[]>[] receiveData;
+        private readonly Thread receiveHandler;
         private readonly object lockSend;
-        private bool isDisposed;
-
-        private bool isThrowed;
-        private Exception throwException;
-
-        public bool IsClosed => isDisposed || isThrowed;
-        public int ReceiveTimeout { get; set; } = -1;
-        public int SendTimeout { get; set; } = -1;
+        internal bool IsClosed { get; private set; }
 
         internal ExtendedSocket(Socket socket, byte channelCount)
         {
             this.socket = socket;
-            inputData = new BlockingQueue<byte[]>[channelCount];
-            for (int i = 0; i < inputData.Length; i++) inputData[i] = new BlockingQueue<byte[]>();
-            receiveThread = new Thread(ReceiveHandler);
+            receiveData = new BlockingQueue<byte[]>[channelCount];
+            for (int i = 0; i < receiveData.Length; i++) receiveData[i] = new BlockingQueue<byte[]>();
+            receiveHandler = new Thread(ReceiveHandler);
             lockSend = new object();
-            isDisposed = false;
+            IsClosed = false;
 
-            isThrowed = false;
-            throwException = null;
-
-            receiveThread.Start();
+            receiveHandler.Start();
         }
 
         private void ReceiveHandler()
         {
             using NetworkStream stream = new NetworkStream(socket);
-            stream.ReadTimeout = 1000;
-            while (!isDisposed)
+            stream.ReadTimeout = 5000;
+            while (!IsClosed)
             {
                 try
                 {
@@ -57,38 +47,34 @@ namespace RemoteProcedureCalls.Network
                     buffer = new byte[size];
                     stream.Read(buffer);
 
-                    inputData[channel].Enqueue(buffer);
+                    receiveData[channel].Enqueue(buffer);
                 }
                 catch (IOException ex)
                 {
                     if (ex.InnerException is SocketException socketException && socketException.SocketErrorCode == SocketError.TimedOut) continue;
-
-                    throwException = ex.InnerException ?? ex;
-                    isThrowed = true;
+                    Close();
                     break;
                 }
             }
-            Dispose();
         }
 
-        public byte[] Receive(byte channel = 0)
+        internal byte[] Receive(byte channel = 0)
         {
-            if (isThrowed) throw throwException;
-            if (IsClosed) throw new ObjectDisposedException(GetType().FullName);
-            if (inputData[channel].TryDequeue(out byte[] data)) return data;
-            throw new SocketException((int)SocketError.TimedOut);
+            if (IsClosed) throw new ExtendedSocketClosedException();
+
+            if (receiveData[channel].TryDequeue(out byte[] data)) return data;
+            throw new ExtendedSocketClosedException();
         }
 
-        public void Send(byte[] data, byte channel = 0)
+        internal void Send(byte[] data, byte channel = 0)
         {
-            if (IsClosed) throw new ObjectDisposedException(GetType().FullName);
+            if (IsClosed) throw new ExtendedSocketClosedException();
 
             lock (lockSend)
             {
                 try
                 {
                     using NetworkStream stream = new NetworkStream(socket);
-                    stream.WriteTimeout = SendTimeout;
                     byte[] buffer;
                     buffer = new byte[] { channel };
                     stream.Write(buffer);
@@ -109,15 +95,29 @@ namespace RemoteProcedureCalls.Network
             }
         }
 
+        internal void WhileWorking(Action action)
+        {
+            try
+            {
+                while (!IsClosed)
+                {
+                    action();
+                }
+            }
+            catch (ExtendedSocketClosedException) { }
+        }
+
+        private void Close()
+        {
+            IsClosed = true;
+            foreach (var data in receiveData) data.Unlock();
+            socket.Close();
+        }
         public void Dispose()
         {
-            isDisposed = false;
-            foreach (var data in inputData)
-            {
-                data.Unlock();
-            }
-            socket.Close();
-            receiveThread.Join();
+            Close();
+            receiveHandler.Join();
         }
+        ~ExtendedSocket() => Dispose();
     }
 }

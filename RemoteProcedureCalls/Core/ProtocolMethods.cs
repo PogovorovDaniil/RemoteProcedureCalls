@@ -13,18 +13,7 @@ namespace RemoteProcedureCalls.Core
 {
     internal static class ProtocolMethods
     {
-        internal static void TryTimeout(Action action)
-        {
-            try
-            {
-                action();
-            }
-            catch(SocketException ex)
-            {
-                if (ex.SocketErrorCode != SocketError.TimedOut) throw;
-            }
-        }
-        internal static void GetImplementation(
+        internal static void GetImplementationHandler(
             ExtendedSocket socket, 
             Dictionary<string, Type> interfaceNames, 
             Dictionary<Type, Func<object>> implementations,
@@ -33,13 +22,13 @@ namespace RemoteProcedureCalls.Core
             List<object> instances,
             byte channel)
         {
-            while (!socket.IsClosed)
+            socket.WhileWorking(() =>
             {
                 string interfaceName = socket.Receive<string>(channel);
                 if (!interfaceNames.ContainsKey(interfaceName))
                 {
                     socket.Send(-1, channel);
-                    continue;
+                    return;
                 }
                 object instance = implementations[interfaceNames[interfaceName]]();
                 int index = instances.IndexOf(instance);
@@ -51,11 +40,11 @@ namespace RemoteProcedureCalls.Core
                 if (index >= 0)
                 {
                     socket.Send(index, channel);
-                    continue;
+                    return;
                 }
                 socket.Send(instances.Count, channel);
                 instances.Add(instance);
-            }
+            });
         }
         internal static void CallMethodHandler(
             ExtendedSocket socket,
@@ -66,7 +55,7 @@ namespace RemoteProcedureCalls.Core
             List<object> instances,
             byte channel)
         {
-            while (!socket.IsClosed)
+            socket.WhileWorking(() =>
             {
                 CallObject callObject = socket.Receive<CallObject>(channel);
                 object implementation = instances[callObject.InstanceIndex];
@@ -94,19 +83,19 @@ namespace RemoteProcedureCalls.Core
                 }
                 object result = method.Invoke(implementation, args);
 
-                if (method.ReturnType == typeof(void)) continue;
+                if (method.ReturnType == typeof(void)) return;
                 if (result is Delegate)
                 {
                     int index = StaticDataService.SaveObject(typeof(Delegate), result);
                     socket.Send(index, channel);
-                    continue;
+                    return;
                 }
                 socket.Send(result, method.ReturnType, channel);
-            }
+            });
         }
         internal static void CallDelegateHandler(ExtendedSocket socket, byte channel)
         {
-            while (!socket.IsClosed)
+            socket.WhileWorking(() =>
             {
                 CallDelegateObject callDelegateObject = socket.Receive<CallDelegateObject>(channel);
                 Delegate @delegate = StaticDataService.GetObject<Delegate>(callDelegateObject.DelegateIndex);
@@ -122,9 +111,9 @@ namespace RemoteProcedureCalls.Core
                 if (result is Delegate) throw new NotSupportedException();
                 if (method.ReturnType == typeof(void)) socket.Send(1, channel);
                 else socket.Send(result, method.ReturnType, channel);
-            }
+            });
         }
-        internal static object CallDelegate(int dataIndex, byte channel, object[] parameters)
+        internal static object CallDelegate(int dataIndex, object[] parameters, byte channel)
         {
             CallDelegateStaticData data = StaticDataService.GetObject<CallDelegateStaticData>(dataIndex);
             Type[] argTypes = data.DelegateMethod.GetParameters().Select(p => p.ParameterType).ToArray();
@@ -148,13 +137,64 @@ namespace RemoteProcedureCalls.Core
                     data.Socket.Receive<int>(channel);
                     return null;
                 }
-                else if (data.DelegateMethod.ReturnType.IsAssignableTo(typeof(Delegate)))
+                if (data.DelegateMethod.ReturnType.IsAssignableTo(typeof(Delegate)))throw new NotSupportedException();
+
+                object result = data.Socket.Receive(data.DelegateMethod.ReturnType, channel);
+                return result;
+            }
+        }
+
+        internal static object CallMethod(
+            ExtendedSocket socket,
+            TypeFactory implementationFactory,
+            TypeFactory.DelegateHandler callDelegate,
+            Dictionary<int, Type> interfaces,
+            Dictionary<Type, MethodInfo[]> interfaceMethods,
+            object lockObject,
+            int instanceIndex, 
+            int methodIndex, 
+            object[] parameters,
+            byte channel)
+        {
+            MethodInfo method = interfaceMethods[interfaces[instanceIndex]][methodIndex];
+            Type[] argTypes = method.GetParameters().Select(p => p.ParameterType).ToArray();
+            CallObject callObject = new CallObject()
+            {
+                InstanceIndex = instanceIndex,
+                MethodIndex = methodIndex,
+                Arguments = new string[parameters.Length]
+            };
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                if (argTypes[i].IsAssignableTo(typeof(Delegate)))
                 {
-                    throw new NotSupportedException();
+                    int index = StaticDataService.SaveObject(typeof(Delegate), parameters[i]);
+                    callObject.Arguments[i] = JsonSerializer.Serialize(index, typeof(int));
                 }
                 else
                 {
-                    object result = data.Socket.Receive(data.DelegateMethod.ReturnType, channel);
+                    callObject.Arguments[i] = JsonSerializer.Serialize(parameters[i], argTypes[i]);
+                }
+            }
+            lock (lockObject)
+            {
+                socket.Send(callObject, channel);
+                if (method.ReturnType == typeof(void)) return null;
+                else if (method.ReturnType.IsAssignableTo(typeof(Delegate)))
+                {
+                    int delegateIndex = socket.Receive<int>(channel);
+                    int dataIndex = StaticDataService.SaveObject(new CallDelegateStaticData()
+                    {
+                        DelegateIndex = delegateIndex,
+                        DelegateMethod = method.ReturnType.GetMethod("Invoke"),
+                        LockObject = new object(),
+                        Socket = socket,
+                    });
+                    return implementationFactory.CreateDelegate(method.ReturnType, callDelegate, dataIndex);
+                }
+                else
+                {
+                    object result = socket.Receive(method.ReturnType, channel);
                     return result;
                 }
             }
