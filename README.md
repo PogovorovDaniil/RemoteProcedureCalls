@@ -24,7 +24,7 @@ public interface ITest
 }
 ```
 
-## Пример реализации на сервере
+### Пример реализации на сервере
 
 ```csharp
 static void Main()
@@ -62,7 +62,7 @@ private static void Server_OnClientClosed(string obj)
     Console.WriteLine($"Client closed");
 }
 ```
-## Пример клиента
+### Пример клиента
 
 ```csharp
 static void Main(string[] args)
